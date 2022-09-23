@@ -82,12 +82,24 @@ class InfixToPostfix {
 };
 
 class Node {
+    private :
+    int charToInt(const char &c) {
+        return c - 48;
+    }
    public:
     char mexp;
     Node *mleft;
     Node *mright;
+    static char intToChar(const int& n) {
+        return n + 48;
+    }
     Node() = default;
-    Node(const char &exp) : mexp(exp) {
+    Node(const char &exp) {
+        if (InfixToPostfix::isOperator(exp)) {
+            mexp = exp;
+        } else {
+            mexp = charToInt(exp);
+        }
     }
 };
 
@@ -109,10 +121,25 @@ class MakeExpTree {
         return rootNode;
     }
 
-   public:
-    ~MakeExpTree() {
-        if (mRoot != nullptr) {
+    void freeTree(const Node* root) {
+        if(root) {
+            freeTree(root->mleft);
+            freeTree(root->mright);
+            if(InfixToPostfix::isOperator(root->mexp))
+            {
+                cout << root->mexp << " " ;
+                delete root;
+            }
+            else {
+                cout <<  Node::intToChar(root->mexp) << " ";
+                delete root;
+            } 
         }
+    }
+   public:
+
+    ~MakeExpTree() {
+        freeTree(mRoot);
     }
     const Node *makeExpTree(const string &postFix) {
         for (const char &s : postFix) {
@@ -132,31 +159,37 @@ class MakeExpTree {
         return mRoot;
     }
 
-    void traverseInOrder(const Node *root) {
-        if (root != nullptr) {
-            traverseInOrder(root->mleft);
-            cout << " " << root->mexp;
-            traverseInOrder(root->mright);
+    int calc(const Node *const root) {
+        if (root->mleft == nullptr && root->mright == nullptr)
+            return root->mexp;
+
+        char leftOperand = calc(root->mleft);
+        char rightOperand = calc(root->mright);
+        switch (root->mexp) {
+            case '+':
+                return leftOperand + rightOperand; //Call Server
+            case '-':
+                return leftOperand - rightOperand; //Call Server
+            case '*':
+                return leftOperand * rightOperand; //Call Server
+            case '/':
+                return leftOperand / rightOperand; //Call Server
+            default:
+                cout << "What is This ?!?" << root->mexp << endl;
+                exit(1);
         }
     }
 };
 
-/*stack<Node*> test = stack<Node*>();
-void testFunc() {
-    auto testNode = make_shared<Node>('4');
-    test.push(testNode.get());
-}*/
 
 int main() {
     // string testString = "A+B/C*D*(E+F)";
     // testString = "(3+5)*2";
     // auto test = make_unique<InfixToPostfix>();
     // test->infixToPostfix(testString);
-    //  testFunc();
-    //  cout << test.top()->mexp <<endl;
-    string testString = "ABC/D*EF+*+";
+    string testString = "184/2*13+*+";
     auto test = make_unique<MakeExpTree>();
     const Node *root = test->makeExpTree(testString);
-    test->traverseInOrder(root);
+    cout << test->calc(root) << endl;
     return 0;
 }
