@@ -159,12 +159,12 @@ class MakeExpTree {
         return mRoot;
     }
 
-    int calc(const Node *const root) {
+    float calc(const Node *const root) {
         if (root->mleft == nullptr && root->mright == nullptr)
             return root->mexp;
 
-        char leftOperand = calc(root->mleft);
-        char rightOperand = calc(root->mright);
+        float leftOperand = calc(root->mleft);
+        float rightOperand = calc(root->mright);
         switch (root->mexp) {
             case '+':
                 return leftOperand + rightOperand; //Call Server
@@ -187,7 +187,7 @@ int main() {
     // testString = "(3+5)*2";
     // auto test = make_unique<InfixToPostfix>();
     // test->infixToPostfix(testString);
-    string testString = "184/2*13+*+";
+    string testString = "183/2*13+*+";
     auto test = make_unique<MakeExpTree>();
     const Node *root = test->makeExpTree(testString);
     cout << test->calc(root) << endl;
