@@ -19,6 +19,7 @@
 #include <map>
 #include <memory>
 #include <stack>
+#include <vector>
 
 using namespace std;
 
@@ -34,15 +35,15 @@ map<char, int> operatorMap = {
 class InfixToPostfix {
    private:
     stack<char> mStack = stack<char>();
-    string resultExp;
+    vector<string> resultExp;
     void pushOperator(const char &op) {
         // op is Valid Key
         int top = Operator::operatorMap[mStack.top()];
         int cur = Operator::operatorMap[op];
         if (Operator::operatorMap[')'] == cur) {
             while (top != Operator::operatorMap['(']) {
-                // cout << mStack.top();
-                resultExp += mStack.top();
+                // resultExp += mStack.top();
+                resultExp.push_back(to_string(mStack.top()));
                 mStack.pop();
                 if (!mStack.empty()) {
                     top = Operator::operatorMap[mStack.top()];
@@ -59,8 +60,8 @@ class InfixToPostfix {
                 mStack.push(op);
                 return;
             }
-            // cout << mStack.top();
-            resultExp += mStack.top();
+            // resultExp += mStack.top();
+            resultExp.push_back(to_string(mStack.top()));
             mStack.pop();
             if (!mStack.empty()) {
                 top = Operator::operatorMap[mStack.top()];
@@ -73,22 +74,48 @@ class InfixToPostfix {
         return;
     }
 
+    bool checkNegative(const string& infix,int pos) {
+        //앞에연산자가 있거나 첫글자일경우
+        if(infix[pos] != '-')
+            return false;
+        else {
+            if(pos == 0)
+                return true;//처음에 -인경우 음수
+            else if(isOperator(infix[pos-1])) {//앞글자가 연산자인경우 음수
+                return true;
+            }
+            return false;
+        }
+    }
+
    public:
-    string infixToPostfix(string &infix) {
+    const vector<string> &infixToPostfix(string &infix) {
+        string tmp;
+        int index = 0;
         for (char &s : infix) {
-            if (isOperator(static_cast<const char &>(s))) {  // is Operator!
-                if (mStack.empty()) {                        // if Stack is Empty push
+            if (!checkNegative(infix,index) && isOperator(static_cast<const char &>(s))) {  // is Operator!
+                if (!tmp.empty()) {
+                    resultExp.push_back(tmp);
+                    tmp.clear();
+                }
+                if (mStack.empty()) {  // if Stack is Empty push
                     mStack.push(s);
                 } else {  // if Stack is Not Empty
                     pushOperator(static_cast<const char &>(s));
                 }
             } else {  // is Not Operator
-                resultExp += s;
+                tmp += s;
             }
+            index++;
+        }
+        if (!tmp.empty()) {
+            resultExp.push_back(tmp);
+            tmp.clear();
         }
         while (!mStack.empty()) {
             // cout << mStack.top();
-            resultExp += mStack.top();
+            // resultExp += mStack.top();
+            resultExp.push_back(to_string(mStack.top()));
             mStack.pop();
         }
         return resultExp;
@@ -103,29 +130,18 @@ class InfixToPostfix {
 };
 
 class Node {
-   private:
-    int charToInt(const char &c) {
-        return c - 48;
-    }
-
    public:
-    char mexp;
+    string mexp;
     Node *mleft;
     Node *mright;
     static char intToChar(const int &n) {
         return n + 48;
     }
     Node() = default;
-    Node(const char &exp) {
-        if (InfixToPostfix::isOperator(exp)) {
-            mexp = exp;
-        } else {
-            mexp = charToInt(exp);
-        }
+    Node(const string &exp) {
+        mexp = exp;
     }
 };
-
-
 
 class ListenTCPServer {
    private:
@@ -175,15 +191,14 @@ class ListenTCPServer {
 
    protected:
     float getAddSubData(const float &leftOperand, const float &rightOperand, const char &op) {
-        cout << "exp" <<leftOperand << op << rightOperand<<endl;
         string &&exp = createPayload(leftOperand, rightOperand, op);
         string &&res = getData(sendAddSubPort, exp.c_str(), exp.size());
         cout << res << endl;
         return stof(res);
     }
     float getMulDivData(const float &leftOperand, const float &rightOperand, const char &op) {
-        string exp = createPayload(leftOperand,rightOperand,op);
-        string res = getData(sendMulDivPort, exp.c_str(), exp.size());
+        string &&exp = createPayload(leftOperand, rightOperand, op);
+        string &&res = getData(sendMulDivPort, exp.c_str(), exp.size());
         cout << res << endl;
         return stof(res);
     }
@@ -231,21 +246,22 @@ class ListenTCPServer {
                     exit(1);
                 }
                 buf[numbytes] = '\0';
-                cout << "Input: "<<buf <<endl;
+                cout << "Input: " << buf << endl;
                 string userInput(buf);
                 auto infixToPostModule = make_unique<InfixToPostfix>();
-                string tmp = infixToPostModule->infixToPostfix(userInput);
-                //cout << tmp << endl;
-                const Node* postRoot = makeTreeModule->makeExpTree(tmp);
-                makeTreeModule->postOrder(postRoot);
+                const vector<string> &tmp = infixToPostModule->infixToPostfix(userInput);
+
+                // cout << tmp << endl;
+                const Node *postRoot = makeTreeModule->makeExpTree(tmp);
                 string result = to_string(makeTreeModule->calc(postRoot));
-                //cout << "result!!" <<<<endl;
-                //string result = to_string(makeTreeModule->calc(postRoot));
+
+                // cout << "result!!" <<<<endl;
+                // string result = to_string(makeTreeModule->calc(postRoot));
 
                 // TODO Jobs..
-                
-                if (send(newFd, result.c_str(),result.size(), 0) == -1)
-                     perror("send");
+
+                if (send(newFd, result.c_str(), result.size(), 0) == -1)
+                    perror("send");
                 cout << "Conncetion Successful! Message! :" << buf << endl;
                 close(newFd);
                 exit(0);
@@ -261,14 +277,14 @@ class MakeExpTree : ListenTCPServer {
    private:
     stack<Node *> mStack = stack<Node *>();
     const Node *mRoot = nullptr;
-    auto createNode(const char &exp) {
+    auto createNode(const string &exp) {
         auto node = new Node(exp);
         node->mleft = nullptr;
         node->mright = nullptr;
         return node;
     }
 
-    auto makeTree(const char &op, Node *const leftNode, Node *const rightNode) {
+    auto makeTree(const string &op, Node *const leftNode, Node *const rightNode) {
         auto rootNode = createNode(op);
         rootNode->mleft = leftNode;
         rootNode->mright = rightNode;
@@ -279,11 +295,11 @@ class MakeExpTree : ListenTCPServer {
         if (root) {
             freeTree(root->mleft);
             freeTree(root->mright);
-            if (InfixToPostfix::isOperator(root->mexp)) {
+            if (InfixToPostfix::isOperator(static_cast<const char &>(stoi(root->mexp)))) {
                 cout << root->mexp << " ";
                 delete root;
             } else {
-                cout << Node::intToChar(root->mexp) << " ";
+                cout << Node::intToChar(static_cast<const char &>(stoi(root->mexp))) << " ";
                 delete root;
             }
         }
@@ -293,9 +309,9 @@ class MakeExpTree : ListenTCPServer {
     ~MakeExpTree() {
         freeTree(mRoot);
     }
-    const Node *makeExpTree(const string &postFix) {
-        for (const char &s : postFix) {
-            if (InfixToPostfix::isOperator(static_cast<const char &>(s))) {  // if Is Operator
+    const Node *makeExpTree(const vector<string> &postFix) {
+        for (const string &s : postFix) {
+            if (InfixToPostfix::isOperator(static_cast<const char &>(stoi(s)))) {  // if Is Operator
                 Node *rightNode = mStack.top();
                 mStack.pop();
                 Node *leftNode = mStack.top();
@@ -310,8 +326,8 @@ class MakeExpTree : ListenTCPServer {
         mStack.pop();
         return mRoot;
     }
-    void postOrder(const Node* root) {
-        if(!root){
+    void postOrder(const Node *root) {
+        if (root) {
             postOrder(root->mleft);
             postOrder(root->mright);
             cout << root->mexp << " ";
@@ -320,21 +336,21 @@ class MakeExpTree : ListenTCPServer {
 
     float calc(const Node *const root) {
         if (root->mleft == nullptr && root->mright == nullptr)
-            return root->mexp;
+            return stof(root->mexp);
         float leftOperand = calc(root->mleft);
         float rightOperand = calc(root->mright);
-        switch (root->mexp) {
+        switch (static_cast<char>(stoi(root->mexp))) {
             case '+':
-                //cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
+                // cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
                 return ListenTCPServer::getAddSubData(leftOperand, rightOperand, '+');  // leftOperand + rightOperand;  // Call Server
             case '-':
-                //cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
+                // cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
                 return ListenTCPServer::getAddSubData(leftOperand, rightOperand, '-');  // Call Server
             case '*':
-                //cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
+                // cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
                 return ListenTCPServer::getMulDivData(leftOperand, rightOperand, '*');  // Call Server
             case '/':
-                //cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
+                // cout<<"test "<< leftOperand << root->mexp <<rightOperand<<endl;
                 return ListenTCPServer::getMulDivData(leftOperand, rightOperand, '/');  // Call Server
             default:
                 cout << "What is This ?!?" << root->mexp << endl;
@@ -342,7 +358,6 @@ class MakeExpTree : ListenTCPServer {
         }
     }
 };
-
 
 int main() {
     auto test = make_unique<ListenTCPServer>();
