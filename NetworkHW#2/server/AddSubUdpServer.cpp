@@ -109,7 +109,7 @@ class ListenUdpServer {
 };
 
 int main() {
-    auto test = make_unique<ListenUdpServer>();
-    test->startListen();
+    auto listenUdpServer = make_unique<ListenUdpServer>();
+    listenUdpServer->startListen();
     return 0;
 }

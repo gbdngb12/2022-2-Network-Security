@@ -74,14 +74,14 @@ class InfixToPostfix {
         return;
     }
 
-    bool checkNegative(const string &infix, int pos) {
+    bool checkNegative(const string& infix,int pos) {
         //앞에연산자가 있거나 첫글자일경우
-        if (infix[pos] != '-')
+        if(infix[pos] != '-')
             return false;
         else {
-            if (pos == 0)
-                return true;                        //처음에 -인경우 음수
-            else if (isOperator(infix[pos - 1])) {  //앞글자가 연산자인경우 음수
+            if(pos == 0)
+                return true;//처음에 -인경우 음수
+            else if(isOperator(infix[pos-1])) {//앞글자가 연산자인경우 음수
                 return true;
             }
             return false;
@@ -93,7 +93,7 @@ class InfixToPostfix {
         string tmp;
         int index = 0;
         for (char &s : infix) {
-            if (!checkNegative(infix, index) && isOperator(static_cast<const char &>(s))) {  // is Operator!
+            if (!checkNegative(infix,index) && isOperator(static_cast<const char &>(s))) {  // is Operator!
                 if (!tmp.empty()) {
                     resultExp.push_back(tmp);
                     tmp.clear();
@@ -143,24 +143,26 @@ class Node {
     }
 };
 
-class ListenUDPServer {
+class ListenTCPServer {
    private:
-    const int listenInputParsePort = 20000;
-    const int sendAddSubPort = 20001;
-    const int sendMulDivPort = 20002;
+    const int listenInputParsePort = 10003;
+    const int sendAddSubPort = 10001;
+    const int sendMulDivPort = 10002;
+    const int backlog = 10;
     const int maxDataSize = 100;
-    int socketFd;                  /* listen on sockfd, new connection on newfd */
-    struct sockaddr_in myAddr;     /* my address information */
-    struct sockaddr_in their_addr; /* connector's address information */
+    int socketFd, newFd;          /* listen on sockfd, new connection on newfd */
+    struct sockaddr_in myAddr;    /* my address information */
+    struct sockaddr_in theirAddr; /* connector's address information */
+    socklen_t sin_size;
     int numbytes;
-    socklen_t addrlen;
     const char *serverAddress = "127.0.0.1";
     string createPayload(const float &leftOperand, const float &rightOperand, const char &op) {
         return to_string(leftOperand) + " " + to_string(op) + " " + to_string(rightOperand);
     }
 
     string getData(const int &port, const char *payload, int size) {
-        if ((socketFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+        struct sockaddr_in their_addr; /* connector's address information */
+        if ((socketFd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
             perror("socket");
             exit(1);
         }
@@ -169,9 +171,12 @@ class ListenUDPServer {
         their_addr.sin_addr.s_addr = inet_addr(serverAddress);
         bzero(&(their_addr.sin_zero), 8); /* zero the rest of the struct */
 
-        if (sendto(socketFd, payload, size, 0, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1) {
-            perror("sendto");
+        if (connect(socketFd, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1) {
+            perror("connect");
             exit(1);
+        }
+        if (send(socketFd, payload, size, 0) == -1) {
+            perror("send");
         }
         char buf[maxDataSize];
         if ((numbytes = recv(socketFd, buf, maxDataSize, 0)) == -1) {
@@ -179,10 +184,7 @@ class ListenUDPServer {
             exit(1);
         }
         buf[numbytes] = '\0';
-        if (close(socketFd) == -1) {
-            perror("close");
-            exit(1);
-        }
+        close(socketFd);
         return string(buf);
     }
 
@@ -202,49 +204,68 @@ class ListenUDPServer {
 
    public:
     void startListen(auto makeTreeModule) {
-        while (1) {                                                             /* main accept() loop */
-            if ((socketFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {  // 1. Create TCP Socket
-                perror("socket");
-                exit(1);
-            }
-            myAddr.sin_family = AF_INET;                                                    /* host byte order */
-            myAddr.sin_port = htons(listenInputParsePort); /* short, network byte order */  // 2. Set Server Port 3490
-            myAddr.sin_addr.s_addr = INADDR_ANY; /* auto-fill with my IP */                 // 3. Set Server IP Address
-            bzero(&(myAddr.sin_zero), 8);                                                   /* zero the rest of the struct */
-            char buf[maxDataSize];
-            socklen_t reuseAddress = 1;
-            if (setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuseAddress, sizeof(reuseAddress)) == -1) {
-                perror("setsockopt");  // Port Reuse Option!
-            }
+        if ((socketFd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1) {  // 1. Create TCP Socket
+            perror("socket");
+            exit(1);
+        }
 
-            if (bind(socketFd, (struct sockaddr *)&myAddr, sizeof(struct sockaddr)) == -1) {  // 4. Bind IP, Port
-                perror("bind");
-                exit(1);
+        myAddr.sin_family = AF_INET;                                                    /* host byte order */
+        myAddr.sin_port = htons(listenInputParsePort); /* short, network byte order */  // 2. Set Server Port 3490
+        myAddr.sin_addr.s_addr = INADDR_ANY; /* auto-fill with my IP */                 // 3. Set Server IP Address
+        bzero(&(myAddr.sin_zero), 8);                                                   /* zero the rest of the struct */
+
+        socklen_t reuseAddress = 1;
+        if (setsockopt(socketFd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuseAddress, sizeof(reuseAddress)) == -1) {
+            perror("setsockopt");  // Port Reuse Option!
+        }
+
+        if (bind(socketFd, (struct sockaddr *)&myAddr, sizeof(struct sockaddr)) == -1) {  // 4. Bind IP, Port
+            perror("bind");
+            exit(1);
+        }
+
+        if (listen(socketFd, backlog) == -1) {  // 5. Listen! => TCP 3단계 Connection
+            perror("listen");
+            exit(1);
+        }
+
+        while (1) { /* main accept() loop */
+            sin_size = sizeof(struct sockaddr_in);
+            if ((newFd = accept(socketFd, (struct sockaddr *)&theirAddr,
+                                &sin_size)) == -1) {  // 6. Accept!
+                perror("accept");
+                continue;
             }
-            socklen_t addr_len = sizeof(struct sockaddr);
-            if ((numbytes = recvfrom(socketFd, buf, maxDataSize, 0,
-                                     (struct sockaddr *)&their_addr, &addr_len)) == -1) {
-                perror("recvfrom");
-                exit(1);
+            cout << "server: got connection from " << inet_ntoa(theirAddr.sin_addr) << endl;
+            if (!fork()) { /* this is the child process */  // 7. then, Child Process do Any Jobs..
+                cout << getpid() << endl;
+                char buf[maxDataSize];
+                if ((numbytes = recv(newFd, buf, maxDataSize, 0)) == -1) {
+                    perror("recv");
+                    exit(1);
+                }
+                buf[numbytes] = '\0';
+                cout << "Input: " << buf << endl;
+                string userInput(buf);
+                auto infixToPostModule = make_unique<InfixToPostfix>();
+                const vector<string> &tmp = infixToPostModule->infixToPostfix(userInput);
+                const Node *postRoot = makeTreeModule->makeExpTree(tmp);
+                string result = to_string(makeTreeModule->calc(postRoot));
+
+                if (send(newFd, result.c_str(), result.size(), 0) == -1)
+                    perror("send");
+                cout << "Conncetion Successful! Message! :" << buf << endl;
+                close(newFd);
+                exit(0);
             }
-            buf[numbytes] = '\0';
-            cout << "Input: " << buf << endl;
-            string userInput(buf);
-            auto infixToPostModule = make_unique<InfixToPostfix>();
-            const vector<string> &tmp = infixToPostModule->infixToPostfix(userInput);
-            const Node *postRoot = makeTreeModule->makeExpTree(tmp);
-            string result = to_string(makeTreeModule->calc(postRoot));
-            //string result = "test";
-            if (sendto(socketFd, result.c_str(), result.size(), 0, (struct sockaddr *)&their_addr, sizeof(struct sockaddr)) == -1) {
-                perror("send");
-            }
-            cout << "Conncetion Successful! Message! :" << buf << endl;
-            close(socketFd);
+            close(newFd); /* parent doesn't need this */
+            while (waitpid(-1, NULL, WNOHANG) > 0)
+                ; /* clean up child processes */
         }
     }
 };
 
-class MakeExpTree : ListenUDPServer {
+class MakeExpTree : ListenTCPServer {
    private:
     stack<Node *> mStack = stack<Node *>();
     const Node *mRoot = nullptr;
@@ -312,13 +333,13 @@ class MakeExpTree : ListenUDPServer {
         float rightOperand = calc(root->mright);
         switch (static_cast<char>(stoi(root->mexp))) {
             case '+':
-                return ListenUDPServer::getAddSubData(leftOperand, rightOperand, '+');  // leftOperand + rightOperand;  // Call Server
+                return ListenTCPServer::getAddSubData(leftOperand, rightOperand, '+');  // leftOperand + rightOperand;  // Call Server
             case '-':
-                return ListenUDPServer::getAddSubData(leftOperand, rightOperand, '-');  // Call Server
+                return ListenTCPServer::getAddSubData(leftOperand, rightOperand, '-');  // Call Server
             case '*':
-                return ListenUDPServer::getMulDivData(leftOperand, rightOperand, '*');  // Call Server
+                return ListenTCPServer::getMulDivData(leftOperand, rightOperand, '*');  // Call Server
             case '/':
-                return ListenUDPServer::getMulDivData(leftOperand, rightOperand, '/');  // Call Server
+                return ListenTCPServer::getMulDivData(leftOperand, rightOperand, '/');  // Call Server
             default:
                 cout << "What is This ?!?" << root->mexp << endl;
                 exit(1);
@@ -327,9 +348,8 @@ class MakeExpTree : ListenUDPServer {
 };
 
 int main() {
-    auto listenUdpServer = make_unique<ListenUDPServer>();
+    auto listenTcpServer = make_unique<ListenTCPServer>();
     auto makeTreeModule = make_shared<MakeExpTree>();
-    listenUdpServer->startListen(makeTreeModule);
+    listenTcpServer->startListen(makeTreeModule);
     return 0;
 }
-
